@@ -1,17 +1,47 @@
-namespace FileMonitoringWorker
+
+using FileMonitoringWorker.Configuration;
+using FileMonitoringWorker.Helpers;
+using Microsoft.Extensions.Options;
+
+namespace FileMonitoringWorker;
+
+public class Worker : BackgroundService
 {
-    public class Worker(ILogger<Worker> logger) : BackgroundService
+    private readonly ILogger<Worker> _logger;
+    private readonly FileMonitorSettings _settings;
+
+    public Worker(ILogger<Worker> logger,IOptions<FileMonitorSettings> options)
     {
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        _logger = logger;
+        _settings = options.Value;
+    }
+
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
+    {
+        try
         {
+            // Initialize required directories
+            DirectoryManager.InitializeDirectories(_settings.SourceFolder,_settings.DestinationFolder,_settings.LogFolder);
+
+            _logger.LogInformation("All required directories initialized successfully.");
+
             while (!stoppingToken.IsCancellationRequested)
             {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-                }
-                await Task.Delay(1000, stoppingToken);
+                _logger.LogInformation("Worker running at: {time}",DateTimeOffset.Now);
+
+                await Task.Delay(5000, stoppingToken);
             }
+        }
+        catch (OperationCanceledException)
+            when (stoppingToken.IsCancellationRequested)
+        {
+            // Normal application shutdown
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Worker encountered an error.");
+            throw;
         }
     }
 }
