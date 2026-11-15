@@ -1,6 +1,7 @@
 
 using FileMonitoringWorker.Configuration;
 using FileMonitoringWorker.Helpers;
+using FileMonitoringWorker.Services;
 using Microsoft.Extensions.Options;
 
 namespace FileMonitoringWorker;
@@ -9,11 +10,16 @@ public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
     private readonly FileMonitorSettings _settings;
+    private readonly FileMonitorService _fileMonitor;
 
-    public Worker(ILogger<Worker> logger,IOptions<FileMonitorSettings> options)
+    public Worker(
+        ILogger<Worker> logger,
+        IOptions<FileMonitorSettings> options,
+        FileMonitorService fileMonitor)
     {
         _logger = logger;
         _settings = options.Value;
+        _fileMonitor = fileMonitor;
     }
 
     protected override async Task ExecuteAsync(
@@ -22,25 +28,39 @@ public class Worker : BackgroundService
         try
         {
             // Initialize required directories
-            DirectoryManager.InitializeDirectories(_settings.SourceFolder,_settings.DestinationFolder,_settings.LogFolder);
+            DirectoryManager.InitializeDirectories(
+                _settings.SourceFolder,
+                _settings.DestinationFolder,
+                _settings.LogFolder);
 
-            _logger.LogInformation("All required directories initialized successfully.");
+            _logger.LogInformation(
+                "Directories initialized successfully.");
 
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogInformation("Worker running at: {time}",DateTimeOffset.Now);
+            // Start monitoring
+            _fileMonitor.StartWatching(
+                _settings.SourceFolder,
+                _settings.DestinationFolder);
 
-                await Task.Delay(5000, stoppingToken);
-            }
+            _logger.LogInformation(
+                "File Monitoring Worker started.");
+
+            // Keep the background service alive
+            await Task.Delay(
+                Timeout.Infinite,
+                stoppingToken);
         }
         catch (OperationCanceledException)
             when (stoppingToken.IsCancellationRequested)
         {
-            // Normal application shutdown
+            _logger.LogInformation(
+                "File Monitoring Worker stopped.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Worker encountered an error.");
+            _logger.LogError(
+                ex,
+                "Worker encountered an error.");
+
             throw;
         }
     }

@@ -1,13 +1,24 @@
 
 using FileMonitoringWorker;
 using FileMonitoringWorker.Configuration;
+using FileMonitoringWorker.Helpers;
+using FileMonitoringWorker.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Bind appsettings.json to FileMonitorSettings
-builder.Services.Configure<FileMonitorSettings>(builder.Configuration.GetSection("FileMonitor"));
+// Configure Windows Service
+builder.Services.AddWindowsService(options =>
+{
+    options.ServiceName = "FileMonitoringWorker";
+});
 
-// Register Worker
+// Configure application settings
+builder.Services.Configure<FileMonitorSettings>(
+    builder.Configuration.GetSection("FileMonitor"));
+
+// Register dependencies
+builder.Services.AddSingleton<DailyFileLogger>();
+builder.Services.AddSingleton<FileMonitorService>();
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
